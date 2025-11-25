@@ -1,7 +1,7 @@
 // Configuration
 const API_BASE_URL = window.location.hostname === 'localhost' 
-    ? 'http://localhost:3000/api' 
-    : 'https://your-backend-url.onrender.com/api';
+    ? 'http://localhost:3003/api' 
+    : 'https://pushups-m8vq.onrender.com/api';
 
 // Global state
 let scene, camera, renderer, spheres = [], raycaster, mouse, touchStart, isDragging = false;
