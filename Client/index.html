@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Push-up Challenge Tracker - Track your fitness journey with friends!">
+    <meta property="og:title" content="Push-up Challenge Tracker">
+    <meta property="og:description" content="Join the push-up challenge and track your progress!">
+    <meta property="og:image" content="./buff-santa.jpg">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Push-up Challenge Tracker">
+    <meta name="twitter:description" content="Join the push-up challenge and track your progress!">
+    <meta name="twitter:image" content="./buff-santa.jpg">
+    
+    <title>Push-up Challenge Tracker</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💪</text></svg>">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            overflow: hidden;
+            background: linear-gradient(135deg, #0a0e1a 0%, #1a2332 100%);
+            touch-action: none;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+
+        /* Loading Screen */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #0a0e1a 0%, #1a2332 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            transition: opacity 0.5s ease;
+        }
+
+        #loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .emoji-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .falling-emoji {
+            position: absolute;
+            font-size: 2rem;
+            animation: fall linear forwards;
+            opacity: 0.8;
+        }
+
+        @keyframes fall {
+            to {
+                transform: translateY(100vh) rotate(360deg);
+            }
+        }
+
+        .loading-text {
+            color: #4ade80;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-top: 2rem;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Add Button */
+        #add-button {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            border: none;
+            color: white;
+            font-size: 2rem;
+            font-weight: 300;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(74, 222, 128, 0.4);
+            z-index: 100;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #add-button:hover {
+            transform: translateX(-50%) scale(1.1);
+            box-shadow: 0 6px 30px rgba(74, 222, 128, 0.6);
+        }
+
+        #add-button:active {
+            transform: translateX(-50%) scale(0.95);
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-radius: 20px;
+            padding: 2rem;
+            max-width: 90%;
+            width: 400px;
+            max-height: 90vh;
+            overflow-y: auto;
+            position: relative;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .modal-title {
+            color: #4ade80;
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            color: #cbd5e1;
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .form-input,
+        .form-textarea {
+            width: 100%;
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(74, 222, 128, 0.2);
+            border-radius: 10px;
+            color: white;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: #4ade80;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .file-input-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem;
+            background: rgba(74, 222, 128, 0.1);
+            border: 2px dashed rgba(74, 222, 128, 0.4);
+            border-radius: 10px;
+            color: #4ade80;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .file-input-label:hover {
+            background: rgba(74, 222, 128, 0.2);
+            border-color: #4ade80;
+        }
+
+        .file-input {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-name {
+            color: #94a3b8;
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            text-align: center;
+        }
+
+        .submit-button,
+        .comment-button {
+            width: 100%;
+            padding: 0.75rem;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .submit-button:hover,
+        .comment-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(74, 222, 128, 0.3);
+        }
+
+        .submit-button:active,
+        .comment-button:active {
+            transform: translateY(0);
+        }
+
+        .submit-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Sphere Detail Modal */
+        .sphere-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid rgba(74, 222, 128, 0.2);
+        }
+
+        .sphere-image {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #4ade80;
+        }
+
+        .sphere-info {
+            flex: 1;
+        }
+
+        .sphere-name {
+            color: #4ade80;
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .sphere-bio {
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .skull-button {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 2px solid rgba(239, 68, 68, 0.4);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .skull-button:hover {
+            background: rgba(239, 68, 68, 0.3);
+            border-color: #ef4444;
+        }
+
+        .skull-button.active {
+            background: #ef4444;
+            border-color: #dc2626;
+        }
+
+        .comments-section {
+            margin-top: 1.5rem;
+        }
+
+        .comments-title {
+            color: #4ade80;
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+        }
+
+        .comment {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.75rem;
+            border-radius: 10px;
+            margin-bottom: 0.75rem;
+        }
+
+        .comment-author {
+            color: #4ade80;
+            font-weight: 600;
+            font-size: 0.85rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .comment-text {
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .comment-date {
+            color: #64748b;
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+        }
+
+        .no-comments {
+            color: #64748b;
+            text-align: center;
+            padding: 2rem;
+            font-style: italic;
+        }
+
+        /* Delete Button (Admin) */
+        .delete-button {
+            width: 100%;
+            padding: 0.75rem;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .delete-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3);
+        }
+
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: rgba(15, 23, 42, 0.95);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            z-index: 10001;
+            transition: transform 0.3s ease;
+            max-width: 90%;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .toast.error {
+            border-left: 4px solid #ef4444;
+        }
+
+        .toast.success {
+            border-left: 4px solid #4ade80;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .modal-content {
+                padding: 1.5rem;
+                width: 95%;
+            }
+
+            .sphere-header {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+        <div class="emoji-container" id="emoji-container"></div>
+        <div class="loading-text">Loading Challenge...</div>
+    </div>
+
+    <!-- Three.js Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- Add Button -->
+    <button id="add-button" aria-label="Add new sphere">+</button>
+
+    <!-- Add Sphere Modal -->
+    <div id="add-modal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" id="add-modal-close" aria-label="Close">×</button>
+            <h2 class="modal-title">Join the Challenge</h2>
+            <form id="add-sphere-form">
+                <div class="form-group">
+                    <label class="form-label">Your Photo</label>
+                    <div class="file-input-wrapper">
+                        <label for="image-input" class="file-input-label">
+                            📸 Choose Photo
+                        </label>
+                        <input type="file" id="image-input" class="file-input" accept="image/*" required>
+                    </div>
+                    <div id="file-name" class="file-name">No file chosen</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="name-input">Your Name</label>
+                    <input type="text" id="name-input" class="form-input" placeholder="Enter your name" maxlength="100" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="bio-input">Bio (Optional)</label>
+                    <textarea id="bio-input" class="form-textarea" placeholder="Tell us about yourself..." maxlength="500"></textarea>
+                </div>
+                <button type="submit" class="submit-button" id="submit-sphere">Join Challenge</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sphere Detail Modal -->
+    <div id="detail-modal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" id="detail-modal-close" aria-label="Close">×</button>
+            <button class="skull-button" id="skull-button" title="Toggle failure status">☠️</button>
+            
+            <div class="sphere-header">
+                <img id="detail-image" class="sphere-image" src="" alt="User photo">
+                <div class="sphere-info">
+                    <div id="detail-name" class="sphere-name"></div>
+                    <div id="detail-bio" class="sphere-bio"></div>
+                </div>
+            </div>
+
+            <div class="comments-section">
+                <h3 class="comments-title">Comments</h3>
+                <div id="comments-list"></div>
+                
+                <form id="add-comment-form">
+                    <div class="form-group">
+                        <input type="text" id="comment-author" class="form-input" placeholder="Your name (optional)" maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <textarea id="comment-text" class="form-textarea" placeholder="Add a comment..." maxlength="500" required></textarea>
+                    </div>
+                    <button type="submit" class="comment-button">Post Comment</button>
+                </form>
+            </div>
+
+            <button class="delete-button" id="delete-sphere-button">🗑️ Delete Sphere (Admin)</button>
+        </div>
+    </div>
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Main Application Script -->
+    <script src="app.js"></script>
+</body>
+</html>

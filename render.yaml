@@ -1,0 +1,40 @@
+services:
+  # Backend API
+  - type: web
+    name: pushup-challenge-api
+    env: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushup-challenge-db
+          property: connectionString
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: FRONTEND_URL
+        value: https://pushup-challenge.onrender.com
+
+  # Frontend Static Site
+  - type: web
+    name: pushup-challenge
+    env: static
+    rootDir: client
+    buildCommand: echo "No build needed"
+    staticPublishPath: .
+
+databases:
+  - name: pushup-challenge-db
+    databaseName: pushup_challenge
+    user: pushup_user
