@@ -32,7 +32,7 @@ app.use(helmet({
 
 // CORS configuration
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || '*',
+  origin: ['http://localhost:8002', process.env.FRONTEND_URL].filter(Boolean),
   optionsSuccessStatus: 200,
   credentials: true
 };
@@ -64,7 +64,7 @@ const uploadLimiter = rateLimit({
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: { rejectUnauthorized: false }
 });
 
 // Test database connection
@@ -193,7 +193,6 @@ app.post('/api/spheres', uploadLimiter, upload.single('image'), [
         {
           folder: 'pushup-challenge',
           transformation: [
-            { width: 512, height: 512, crop: 'fill', gravity: 'face' },
             { quality: 'auto:good' }
           ]
         },

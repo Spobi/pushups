@@ -7,11 +7,16 @@ const API_BASE_URL = window.location.hostname === 'localhost'
 let scene, camera, renderer, spheres = [], raycaster, mouse, touchStart, isDragging = false;
 let selectedSphere = null, currentSphereId = null;
 let physics = { gravity: 0, damping: 0.98, restitution: 0.8 };
+let gridIndex = 0; // Track position in grid
+let touchStartPosition = null; // Track initial touch position for tap vs drag detection
+let lastPinchDistance = 0; // Track pinch zoom distance
+let mouseDownPosition = null; // Track mouse down position for click vs drag detection
+let hasDraggedMouse = false; // Track if mouse has been dragged
 
 // ============ INITIALIZATION ============
 
 // Christmas emojis for loading screen
-const christmasEmojis = ['🎄', '🎅', '⛄', '🎁', '❄️', '🔔', '⭐', '🕯️', '🦌', '🤶'];
+const christmasEmojis = ['🎄', '🎅', '⛄', '🎁', '⭐', '🌟', '❄', '🕯️', '🦌', '🤶'];
 
 function createFallingEmoji() {
     const emojiContainer = document.getElementById('emoji-container');
@@ -40,9 +45,9 @@ const emojiInterval = setInterval(() => {
 function initThreeJS() {
     // Scene
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0e1a);
-    scene.fog = new THREE.Fog(0x0a0e1a, 10, 50);
-
+    scene.background = new THREE.Color(0xffffff); // White background
+    // Remove fog for cleaner white background
+    
     // Camera
     camera = new THREE.PerspectiveCamera(
         75,
@@ -50,28 +55,51 @@ function initThreeJS() {
         0.1,
         1000
     );
-    camera.position.z = 15;
+    camera.position.set(0, 5, 25); // Adjusted for better grid view
+    camera.lookAt(0, 0, 0);
 
-    // Renderer
+    // Renderer with shadow support
     renderer = new THREE.WebGLRenderer({ 
         antialias: true,
         powerPreference: 'high-performance'
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.getElementById('canvas-container').appendChild(renderer.domElement);
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
-    const pointLight1 = new THREE.PointLight(0x4ade80, 1, 100);
-    pointLight1.position.set(10, 10, 10);
-    scene.add(pointLight1);
+    // Main directional light with shadows
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(10, 20, 10);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.camera.near = 0.5;
+    directionalLight.shadow.camera.far = 500;
+    directionalLight.shadow.camera.left = -30;
+    directionalLight.shadow.camera.right = 30;
+    directionalLight.shadow.camera.top = 30;
+    directionalLight.shadow.camera.bottom = -30;
+    scene.add(directionalLight);
 
-    const pointLight2 = new THREE.PointLight(0x22c55e, 0.5, 100);
-    pointLight2.position.set(-10, -10, -10);
-    scene.add(pointLight2);
+    // Secondary softer light
+    const pointLight = new THREE.PointLight(0xffffff, 0.3, 100);
+    pointLight.position.set(-10, 10, -10);
+    scene.add(pointLight);
+
+    // Ground plane to receive shadows
+    const groundGeometry = new THREE.PlaneGeometry(100, 100);
+    const groundMaterial = new THREE.ShadowMaterial({ opacity: 0.1 });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -5; // Position lower below spheres
+    ground.receiveShadow = true;
+    scene.add(ground);
 
     // Raycaster for click detection
     raycaster = new THREE.Raycaster();
@@ -86,18 +114,29 @@ function initThreeJS() {
     renderer.domElement.addEventListener('mousemove', onMouseMove);
     renderer.domElement.addEventListener('mouseup', onMouseUp);
     renderer.domElement.addEventListener('click', onClick);
+    renderer.domElement.addEventListener('wheel', onMouseWheel, { passive: false });
 }
 
 // ============ SPHERE CREATION ============
 
 function createSphere(data) {
-    const geometry = new THREE.SphereGeometry(1, 32, 32);
+    const geometry = new THREE.SphereGeometry(2, 32, 32); // Increased size from 1 to 2
     
     // Load texture
     const textureLoader = new THREE.TextureLoader();
     const texture = textureLoader.load(data.image_url);
     
-    // Create green ornament-like material
+    // Center the texture on the sphere
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    
+    // Adjust texture offset and repeat to center it
+    // This makes the center of the image appear on the front of the sphere
+    texture.offset.set(0.25, 0); // Center horizontally
+    texture.repeat.set(1, 1); // Show 100% of image
+    texture.center.set(0.5, 0.5); // Set rotation center
+    
+    // Create material with color based on failure status
     const material = new THREE.MeshPhongMaterial({
         map: texture,
         color: data.is_failed ? 0xff0000 : 0x4ade80,
@@ -112,23 +151,41 @@ function createSphere(data) {
 
     const mesh = new THREE.Mesh(geometry, material);
     
-    // Set position (random if not saved, otherwise use saved position)
-    if (data.position_x !== 0 || data.position_y !== 0 || data.position_z !== 0) {
-        mesh.position.set(data.position_x, data.position_y, data.position_z);
-    } else {
-        mesh.position.set(
-            (Math.random() - 0.5) * 20,
-            (Math.random() - 0.5) * 20,
-            (Math.random() - 0.5) * 20
-        );
+    // Enable shadow casting
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    
+    // Arrange spheres in triangle formation (Christmas tree style)
+    const spacing = 5; // Space between spheres
+    
+    // Calculate triangle position
+    // Find which row this sphere belongs to
+    let row = 0;
+    let rowStartIndex = 0;
+    while (rowStartIndex + row + 1 <= gridIndex) {
+        rowStartIndex += row + 1;
+        row++;
     }
-
-    // Physics properties
-    mesh.velocity = new THREE.Vector3(
-        (Math.random() - 0.5) * 0.02,
-        (Math.random() - 0.5) * 0.02,
-        (Math.random() - 0.5) * 0.02
+    
+    // Position within the row (0-indexed)
+    const col = gridIndex - rowStartIndex;
+    const spheresInRow = row + 1;
+    
+    // Center the triangle and flip it upside down (point at top)
+    // Invert the row so row 0 is at the top
+    const invertedRow = row;
+    const offsetX = (spheresInRow - 1) * spacing / 2;
+    
+    mesh.position.set(
+        col * spacing - offsetX,
+        -invertedRow * spacing, // Negative to go down from top
+        0 // All spheres on same plane
     );
+    
+    gridIndex++; // Increment for next sphere
+
+    // Physics properties - start with no initial velocity
+    mesh.velocity = new THREE.Vector3(0, 0, 0);
 
     mesh.userData = {
         id: data.id,
@@ -137,7 +194,9 @@ function createSphere(data) {
         image_url: data.image_url,
         is_failed: data.is_failed,
         isDragging: false,
-        originalPosition: mesh.position.clone()
+        originalPosition: mesh.position.clone(),
+        gridRow: row,
+        gridCol: col
     };
 
     scene.add(mesh);
@@ -176,6 +235,10 @@ function updatePhysics() {
         // Update position based on velocity
         sphere.position.add(sphere.velocity);
 
+        // Keep spheres on the same Z plane (z=0) for better collisions
+        sphere.position.z = 0;
+        sphere.velocity.z = 0;
+
         // Boundary collision (invisible walls)
         const boundary = 12;
         if (Math.abs(sphere.position.x) > boundary) {
@@ -185,10 +248,6 @@ function updatePhysics() {
         if (Math.abs(sphere.position.y) > boundary) {
             sphere.position.y = Math.sign(sphere.position.y) * boundary;
             sphere.velocity.y *= -physics.restitution;
-        }
-        if (Math.abs(sphere.position.z) > boundary) {
-            sphere.position.z = Math.sign(sphere.position.z) * boundary;
-            sphere.velocity.z *= -physics.restitution;
         }
 
         // Apply damping
@@ -204,7 +263,7 @@ function updatePhysics() {
             if (sphere1.userData.isDragging || sphere2.userData.isDragging) continue;
 
             const distance = sphere1.position.distanceTo(sphere2.position);
-            const minDistance = 2; // Sum of radii
+            const minDistance = 4; // Sum of radii (2 + 2)
 
             if (distance < minDistance) {
                 // Calculate collision response
@@ -229,6 +288,10 @@ function updatePhysics() {
                 const separation = normal.multiplyScalar(overlap);
                 sphere1.position.sub(separation);
                 sphere2.position.add(separation);
+                
+                // Keep on same Z plane after collision
+                sphere1.position.z = 0;
+                sphere2.position.z = 0;
             }
         }
     }
@@ -239,10 +302,7 @@ function animate() {
     
     updatePhysics();
     
-    // Rotate spheres slightly
-    spheres.forEach(sphere => {
-        sphere.rotation.y += 0.005;
-    });
+    // Don't rotate spheres - keep images visible
 
     renderer.render(scene, camera);
 }
@@ -261,7 +321,22 @@ function getMousePosition(event) {
 
 function onTouchStart(event) {
     event.preventDefault();
+    
+    // Handle pinch zoom with two fingers
+    if (event.touches.length === 2) {
+        const dx = event.touches[0].clientX - event.touches[1].clientX;
+        const dy = event.touches[0].clientY - event.touches[1].clientY;
+        lastPinchDistance = Math.sqrt(dx * dx + dy * dy);
+        return;
+    }
+    
     getMousePosition(event);
+    
+    // Store initial touch position for tap detection
+    touchStartPosition = {
+        x: event.touches[0].clientX,
+        y: event.touches[0].clientY
+    };
     
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(spheres);
@@ -275,11 +350,37 @@ function onTouchStart(event) {
             y: event.touches[0].clientY,
             time: Date.now()
         };
+    } else {
+        touchStart = {
+            x: event.touches[0].clientX,
+            y: event.touches[0].clientY,
+            time: Date.now()
+        };
     }
 }
 
 function onTouchMove(event) {
     event.preventDefault();
+    
+    // Handle pinch zoom with two fingers
+    if (event.touches.length === 2) {
+        const dx = event.touches[0].clientX - event.touches[1].clientX;
+        const dy = event.touches[0].clientY - event.touches[1].clientY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (lastPinchDistance > 0) {
+            const delta = distance - lastPinchDistance;
+            const zoomSpeed = 0.05;
+            
+            // Zoom camera
+            camera.position.z -= delta * zoomSpeed;
+            // Clamp zoom
+            camera.position.z = Math.max(10, Math.min(50, camera.position.z));
+        }
+        
+        lastPinchDistance = distance;
+        return;
+    }
     
     if (selectedSphere && isDragging) {
         getMousePosition(event);
@@ -290,6 +391,7 @@ function onTouchMove(event) {
         raycaster.ray.at(distance, point);
         
         selectedSphere.position.copy(point);
+        selectedSphere.position.z = 0; // Keep on same plane
         
         // Calculate velocity for throw
         if (touchStart) {
@@ -299,6 +401,7 @@ function onTouchMove(event) {
             
             selectedSphere.velocity.x = (deltaX / deltaTime) * 0.05;
             selectedSphere.velocity.y = -(deltaY / deltaTime) * 0.05;
+            selectedSphere.velocity.z = 0; // No Z velocity
             
             touchStart = {
                 x: event.touches[0].clientX,
@@ -306,7 +409,7 @@ function onTouchMove(event) {
                 time: Date.now()
             };
         }
-    } else if (!isDragging) {
+    } else if (!isDragging && !selectedSphere) {
         // Camera rotation by swiping
         if (event.touches.length === 1 && touchStart) {
             const deltaX = event.touches[0].clientX - touchStart.x;
@@ -314,6 +417,9 @@ function onTouchMove(event) {
             
             camera.rotation.y += deltaX * 0.005;
             camera.rotation.x += deltaY * 0.005;
+            
+            // Clamp vertical rotation
+            camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
             
             touchStart = {
                 x: event.touches[0].clientX,
@@ -327,16 +433,41 @@ function onTouchMove(event) {
 function onTouchEnd(event) {
     event.preventDefault();
     
+    // Reset pinch zoom tracking
+    if (event.touches.length < 2) {
+        lastPinchDistance = 0;
+    }
+    
+    // Check if this was a tap (no significant movement) vs a drag
+    if (touchStartPosition && event.changedTouches.length > 0) {
+        const endX = event.changedTouches[0].clientX;
+        const endY = event.changedTouches[0].clientY;
+        const deltaX = Math.abs(endX - touchStartPosition.x);
+        const deltaY = Math.abs(endY - touchStartPosition.y);
+        const tapThreshold = 10; // pixels
+        
+        // If movement was minimal, treat as a tap
+        if (deltaX < tapThreshold && deltaY < tapThreshold && selectedSphere) {
+            openDetailModal(selectedSphere.userData.id);
+        }
+    }
+    
     if (selectedSphere && isDragging) {
         selectedSphere.userData.isDragging = false;
         selectedSphere = null;
         isDragging = false;
     }
+    
     touchStart = null;
+    touchStartPosition = null;
 }
 
 function onMouseDown(event) {
     getMousePosition(event);
+    
+    // Store initial mouse position for drag detection
+    mouseDownPosition = { x: event.clientX, y: event.clientY };
+    hasDraggedMouse = false;
     
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(spheres);
@@ -349,6 +480,17 @@ function onMouseDown(event) {
 }
 
 function onMouseMove(event) {
+    // Check if mouse has moved significantly (drag detection)
+    if (mouseDownPosition && !hasDraggedMouse) {
+        const deltaX = Math.abs(event.clientX - mouseDownPosition.x);
+        const deltaY = Math.abs(event.clientY - mouseDownPosition.y);
+        const dragThreshold = 5; // pixels
+        
+        if (deltaX > dragThreshold || deltaY > dragThreshold) {
+            hasDraggedMouse = true;
+        }
+    }
+    
     if (selectedSphere && isDragging) {
         getMousePosition(event);
         raycaster.setFromCamera(mouse, camera);
@@ -358,10 +500,11 @@ function onMouseMove(event) {
         raycaster.ray.at(distance, point);
         
         selectedSphere.position.copy(point);
+        selectedSphere.position.z = 0; // Keep on same plane
         selectedSphere.velocity.set(
             (Math.random() - 0.5) * 0.05,
             (Math.random() - 0.5) * 0.05,
-            (Math.random() - 0.5) * 0.05
+            0 // No Z velocity
         );
     }
 }
@@ -372,10 +515,15 @@ function onMouseUp() {
         selectedSphere = null;
         isDragging = false;
     }
+    mouseDownPosition = null;
 }
 
 function onClick(event) {
-    if (isDragging) return;
+    // Only open modal if we didn't drag
+    if (hasDraggedMouse) {
+        hasDraggedMouse = false;
+        return;
+    }
     
     getMousePosition(event);
     raycaster.setFromCamera(mouse, camera);
@@ -393,9 +541,22 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
+function onMouseWheel(event) {
+    event.preventDefault();
+    
+    // Zoom camera based on scroll direction
+    const zoomSpeed = 0.5;
+    camera.position.z += event.deltaY * zoomSpeed * 0.01;
+    
+    // Clamp zoom
+    camera.position.z = Math.max(10, Math.min(50, camera.position.z));
+}
+
 // ============ API FUNCTIONS ============
 
 async function fetchSpheres() {
+    const startTime = Date.now();
+    
     try {
         const response = await fetch(`${API_BASE_URL}/spheres`);
         if (!response.ok) throw new Error('Failed to fetch spheres');
@@ -405,10 +566,21 @@ async function fetchSpheres() {
             createSphere(sphereData);
         });
         
+        // Ensure loading screen shows for at least 3 seconds
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = Math.max(0, 3000 - elapsedTime);
+        await new Promise(resolve => setTimeout(resolve, remainingTime));
+        
         hideLoading();
     } catch (error) {
         console.error('Error fetching spheres:', error);
         showToast('Failed to load spheres', 'error');
+        
+        // Still wait minimum time even on error
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = Math.max(0, 3000 - elapsedTime);
+        await new Promise(resolve => setTimeout(resolve, remainingTime));
+        
         hideLoading();
     }
 }
@@ -552,6 +724,10 @@ function closeAddModal() {
     document.getElementById('add-modal').classList.remove('active');
     document.getElementById('add-sphere-form').reset();
     document.getElementById('file-name').textContent = 'No file chosen';
+    document.getElementById('file-name').style.color = '#666';
+    document.getElementById('file-name').style.fontWeight = 'normal';
+    croppedImageBlob = null;
+    cropImage = null;
 }
 
 async function openDetailModal(sphereId) {
@@ -599,6 +775,205 @@ function closeDetailModal() {
     currentSphereId = null;
 }
 
+// ============ IMAGE CROPPING MODAL FUNCTIONALITY ============
+
+let croppedImageBlob = null;
+let cropImage = null;
+let cropZoom = 1;
+let cropPosition = { x: 0, y: 0 };
+let isCropping = false;
+let cropDragStart = { x: 0, y: 0 };
+
+function openCropModal(file) {
+    console.log('Opening crop modal for:', file.name);
+    const modal = document.getElementById('crop-modal');
+    const cropImageEl = document.getElementById('crop-image');
+    
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        cropImageEl.src = e.target.result;
+        cropImage = new Image();
+        cropImage.src = e.target.result;
+        
+        cropImage.onload = function() {
+            console.log('Image loaded for cropping:', cropImage.width, 'x', cropImage.height);
+            initializeCropPosition();
+            modal.classList.add('active');
+        };
+    };
+    
+    reader.readAsDataURL(file);
+}
+
+function initializeCropPosition() {
+    const cropImageEl = document.getElementById('crop-image');
+    const circleSize = 300;
+    
+    // Calculate scale to cover the circle
+    let scale;
+    if (cropImage.width > cropImage.height) {
+        scale = circleSize / cropImage.height;
+    } else {
+        scale = circleSize / cropImage.width;
+    }
+    
+    const scaledWidth = cropImage.width * scale;
+    const scaledHeight = cropImage.height * scale;
+    
+    cropImageEl.style.width = scaledWidth + 'px';
+    cropImageEl.style.height = scaledHeight + 'px';
+    
+    // Center the image
+    cropPosition.x = (circleSize - scaledWidth) / 2;
+    cropPosition.y = (circleSize - scaledHeight) / 2;
+    
+    cropImageEl.style.left = cropPosition.x + 'px';
+    cropImageEl.style.top = cropPosition.y + 'px';
+    
+    // Reset zoom
+    cropZoom = 1;
+    document.getElementById('zoom-slider').value = 100;
+}
+
+function closeCropModal() {
+    document.getElementById('crop-modal').classList.remove('active');
+}
+
+function resetCropPosition() {
+    initializeCropPosition();
+}
+
+function onCropDragStart(e) {
+    isCropping = true;
+    
+    if (e.type === 'touchstart') {
+        cropDragStart.x = e.touches[0].clientX - cropPosition.x;
+        cropDragStart.y = e.touches[0].clientY - cropPosition.y;
+    } else {
+        cropDragStart.x = e.clientX - cropPosition.x;
+        cropDragStart.y = e.clientY - cropPosition.y;
+    }
+    
+    e.preventDefault();
+}
+
+function onCropDragMove(e) {
+    if (!isCropping) return;
+    
+    const cropImageEl = document.getElementById('crop-image');
+    if (!cropImageEl) return;
+    
+    if (e.type === 'touchmove') {
+        cropPosition.x = e.touches[0].clientX - cropDragStart.x;
+        cropPosition.y = e.touches[0].clientY - cropDragStart.y;
+    } else {
+        cropPosition.x = e.clientX - cropDragStart.x;
+        cropPosition.y = e.clientY - cropDragStart.y;
+    }
+    
+    cropImageEl.style.left = cropPosition.x + 'px';
+    cropImageEl.style.top = cropPosition.y + 'px';
+    
+    e.preventDefault();
+}
+
+function onCropDragEnd(e) {
+    if (isCropping) {
+        isCropping = false;
+    }
+    // Don't prevent default here to allow other interactions
+}
+
+function onZoomChange(e) {
+    const zoomValue = parseInt(e.target.value);
+    cropZoom = zoomValue / 100;
+    
+    const cropImageEl = document.getElementById('crop-image');
+    const circleSize = 300;
+    
+    // Calculate new dimensions
+    let baseScale;
+    if (cropImage.width > cropImage.height) {
+        baseScale = circleSize / cropImage.height;
+    } else {
+        baseScale = circleSize / cropImage.width;
+    }
+    
+    const scaledWidth = cropImage.width * baseScale * cropZoom;
+    const scaledHeight = cropImage.height * baseScale * cropZoom;
+    
+    // Get center point before zoom
+    const oldWidth = parseInt(cropImageEl.style.width);
+    const oldHeight = parseInt(cropImageEl.style.height);
+    const centerX = cropPosition.x + oldWidth / 2;
+    const centerY = cropPosition.y + oldHeight / 2;
+    
+    // Apply new dimensions
+    cropImageEl.style.width = scaledWidth + 'px';
+    cropImageEl.style.height = scaledHeight + 'px';
+    
+    // Adjust position to maintain center
+    cropPosition.x = centerX - scaledWidth / 2;
+    cropPosition.y = centerY - scaledHeight / 2;
+    
+    cropImageEl.style.left = cropPosition.x + 'px';
+    cropImageEl.style.top = cropPosition.y + 'px';
+}
+
+async function confirmCrop() {
+    console.log('Confirming crop');
+    
+    return new Promise((resolve, reject) => {
+        try {
+            const cropImageEl = document.getElementById('crop-image');
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const size = 512; // Output size
+            canvas.width = size;
+            canvas.height = size;
+            
+            // Create circular clipping path
+            ctx.beginPath();
+            ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.clip();
+            
+            // Calculate scale from preview (300px) to final (512px)
+            const scale = size / 300;
+            
+            // Draw the image at the positioned location, scaled up
+            const scaledX = cropPosition.x * scale;
+            const scaledY = cropPosition.y * scale;
+            const scaledWidth = parseInt(cropImageEl.style.width) * scale;
+            const scaledHeight = parseInt(cropImageEl.style.height) * scale;
+            
+            ctx.drawImage(cropImage, scaledX, scaledY, scaledWidth, scaledHeight);
+            
+            // Convert to blob
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    croppedImageBlob = blob;
+                    console.log('Crop successful, blob size:', blob.size);
+                    closeCropModal();
+                    
+                    // Update file name to show image is ready
+                    document.getElementById('file-name').textContent = 'âœ“ Photo positioned and ready';
+                    document.getElementById('file-name').style.color = '#2d5016';
+                    document.getElementById('file-name').style.fontWeight = '600';
+                    
+                    resolve(blob);
+                } else {
+                    reject(new Error('Failed to create image blob'));
+                }
+            }, 'image/jpeg', 0.9);
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
 // ============ EVENT LISTENERS ============
 
 document.getElementById('add-button').addEventListener('click', openAddModal);
@@ -613,11 +988,30 @@ document.getElementById('detail-modal').addEventListener('click', (e) => {
     if (e.target.id === 'detail-modal') closeDetailModal();
 });
 
-// File input display
+// File input display - opens crop modal
 document.getElementById('image-input').addEventListener('change', (e) => {
-    const fileName = e.target.files[0]?.name || 'No file chosen';
-    document.getElementById('file-name').textContent = fileName;
+    const file = e.target.files[0];
+    if (file) {
+        openCropModal(file);
+    }
 });
+
+// Crop modal event listeners
+const cropCircle = document.getElementById('crop-circle');
+if (cropCircle) {
+    cropCircle.addEventListener('mousedown', onCropDragStart);
+    cropCircle.addEventListener('mousemove', onCropDragMove);
+    cropCircle.addEventListener('mouseup', onCropDragEnd);
+    cropCircle.addEventListener('mouseleave', onCropDragEnd);
+    
+    cropCircle.addEventListener('touchstart', onCropDragStart, { passive: false });
+    cropCircle.addEventListener('touchmove', onCropDragMove, { passive: false });
+    cropCircle.addEventListener('touchend', onCropDragEnd, { passive: false });
+}
+
+document.getElementById('zoom-slider').addEventListener('input', onZoomChange);
+document.getElementById('crop-reset-btn').addEventListener('click', resetCropPosition);
+document.getElementById('crop-confirm-btn').addEventListener('click', confirmCrop);
 
 // Add sphere form
 document.getElementById('add-sphere-form').addEventListener('submit', async (e) => {
@@ -627,16 +1021,22 @@ document.getElementById('add-sphere-form').addEventListener('submit', async (e) 
     submitButton.disabled = true;
     submitButton.textContent = 'Uploading...';
     
-    const formData = new FormData();
-    formData.append('name', document.getElementById('name-input').value);
-    formData.append('bio', document.getElementById('bio-input').value);
-    formData.append('image', document.getElementById('image-input').files[0]);
-    
     try {
+        // Check if image was cropped
+        if (!croppedImageBlob) {
+            throw new Error('Please select and position a photo first');
+        }
+        
+        const formData = new FormData();
+        formData.append('name', document.getElementById('name-input').value);
+        formData.append('bio', document.getElementById('bio-input').value);
+        formData.append('image', croppedImageBlob, 'profile.jpg');
+        
         await createNewSphere(formData);
         closeAddModal();
     } catch (error) {
-        // Error already shown in createNewSphere
+        console.error('Error submitting form:', error);
+        showToast(error.message || 'Failed to upload', 'error');
     } finally {
         submitButton.disabled = false;
         submitButton.textContent = 'Join Challenge';
