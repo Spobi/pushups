@@ -32,7 +32,12 @@ app.use(helmet({
 
 // CORS configuration
 const corsOptions = {
-  origin: ['http://localhost:8002', process.env.FRONTEND_URL].filter(Boolean),
+  origin: [
+    'http://localhost:8002',
+    'https://pushups-frontend.onrender.com',
+    'https://emanuswell.christmas',
+    process.env.FRONTEND_URL
+  ].filter(Boolean),
   optionsSuccessStatus: 200,
   credentials: true
 };
