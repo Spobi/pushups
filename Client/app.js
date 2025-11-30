@@ -496,7 +496,7 @@ function onTouchMove(event) {
             // Zoom camera
             camera.position.z -= delta * zoomSpeed;
             // Clamp zoom - extended range for larger tree
-            camera.position.z = Math.max(15, Math.min(120, camera.position.z));
+            camera.position.z = Math.max(10, Math.min(120, camera.position.z));
             
             // Keep looking at the same target
             camera.lookAt(cameraTarget.x, cameraTarget.y, 0);
@@ -700,7 +700,7 @@ function onMouseWheel(event) {
     camera.position.z += event.deltaY * zoomSpeed * 0.01;
     
     // Clamp zoom - extended range for larger tree
-    camera.position.z = Math.max(15, Math.min(120, camera.position.z));
+    camera.position.z = Math.max(10, Math.min(120, camera.position.z));
     
     // Keep looking at the same target
     camera.lookAt(cameraTarget.x, cameraTarget.y, 0);
