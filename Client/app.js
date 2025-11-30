@@ -12,11 +12,107 @@ let touchStartPosition = null; // Track initial touch position for tap vs drag d
 let lastPinchDistance = 0; // Track pinch zoom distance
 let mouseDownPosition = null; // Track mouse down position for click vs drag detection
 let hasDraggedMouse = false; // Track if mouse has been dragged
+let treeStar = null; // The gold star at top of tree
+let cameraTarget = { x: 0, y: -20 }; // Where the camera is looking
+let isPanning = false; // Track if we're panning the camera
+let panStart = { x: 0, y: 0 }; // Track pan start position
+
+// ============ STAR GEOMETRY CREATION ============
+
+function createStarGeometry(outerRadius, innerRadius, points) {
+    const shape = new THREE.Shape();
+    const angleStep = Math.PI / points;
+    
+    for (let i = 0; i < points * 2; i++) {
+        const radius = i % 2 === 0 ? outerRadius : innerRadius;
+        const angle = i * angleStep - Math.PI / 2; // Start from top
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        
+        if (i === 0) {
+            shape.moveTo(x, y);
+        } else {
+            shape.lineTo(x, y);
+        }
+    }
+    shape.closePath();
+    
+    // Extrude to give it depth
+    const extrudeSettings = {
+        depth: 0.5,
+        bevelEnabled: true,
+        bevelThickness: 0.1,
+        bevelSize: 0.1,
+        bevelSegments: 3
+    };
+    
+    return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+}
+
+function createTreeStar() {
+    // Create 5-pointed star geometry
+    const starGeometry = createStarGeometry(3, 1.2, 5);
+    
+    // Load the buff Santa image as texture
+    const textureLoader = new THREE.TextureLoader();
+    const santaTexture = textureLoader.load('./buff-santa.jpg');
+    
+    // Create gold reflective material with Santa image overlay
+    const starMaterial = new THREE.MeshPhongMaterial({
+        color: 0xffd700, // Gold color
+        emissive: 0xaa8800,
+        emissiveIntensity: 0.3,
+        shininess: 150,
+        specular: 0xffffcc,
+        reflectivity: 1.0
+    });
+    
+    const starMesh = new THREE.Mesh(starGeometry, starMaterial);
+    
+    // Create a circular plane for the Santa image in the center of the star
+    const circleGeometry = new THREE.CircleGeometry(1.5, 32);
+    const circleMaterial = new THREE.MeshBasicMaterial({
+        map: santaTexture,
+        transparent: false
+    });
+    const santaCircle = new THREE.Mesh(circleGeometry, circleMaterial);
+    santaCircle.position.z = 0.35; // Slightly in front of star
+    
+    // Create a group to hold both
+    const starGroup = new THREE.Group();
+    starGroup.add(starMesh);
+    starGroup.add(santaCircle);
+    
+    // Position at top of tree (above row 0)
+    starGroup.position.set(0, 6, 0);
+    
+    // Rotate to face camera
+    starGroup.rotation.x = 0;
+    starGroup.rotation.y = 0;
+    
+    // Enable shadows
+    starMesh.castShadow = true;
+    starMesh.receiveShadow = true;
+    
+    scene.add(starGroup);
+    treeStar = starGroup;
+    
+    return starGroup;
+}
+
+function updateStarPosition() {
+    if (!treeStar) return;
+    
+    // Position star above the top of the tree
+    // The tree grows downward, so the top is always at y=0 or slightly above
+    const starY = 5; // Fixed position above the tree top
+    treeStar.position.set(0, starY, 0);
+}
 
 // ============ INITIALIZATION ============
 
 // Christmas emojis for loading screen
-const christmasEmojis = ['🎄', '🎅', '⛄', '🎁', '⭐', '🌟', '❄', '🕯️', '🦌', '🤶'];
+const christmasEmojis = ['ðŸŽ„', 'ðŸŽ…', 'â›„', 'ðŸŽ', 'â­', 'ðŸŒŸ', 'â„', 'ðŸ•¯ï¸', 'ðŸ¦Œ', 'ðŸ¤¶'];
 
 function createFallingEmoji() {
     const emojiContainer = document.getElementById('emoji-container');
@@ -55,8 +151,8 @@ function initThreeJS() {
         0.1,
         1000
     );
-    camera.position.set(0, 5, 25); // Adjusted for better grid view
-    camera.lookAt(0, 0, 0);
+    camera.position.set(cameraTarget.x, cameraTarget.y, 60); // Use cameraTarget for initial position
+    camera.lookAt(cameraTarget.x, cameraTarget.y, 0); // Look at target
 
     // Renderer with shadow support
     renderer = new THREE.WebGLRenderer({ 
@@ -81,10 +177,10 @@ function initThreeJS() {
     directionalLight.shadow.mapSize.height = 2048;
     directionalLight.shadow.camera.near = 0.5;
     directionalLight.shadow.camera.far = 500;
-    directionalLight.shadow.camera.left = -30;
-    directionalLight.shadow.camera.right = 30;
-    directionalLight.shadow.camera.top = 30;
-    directionalLight.shadow.camera.bottom = -30;
+    directionalLight.shadow.camera.left = -50;
+    directionalLight.shadow.camera.right = 50;
+    directionalLight.shadow.camera.top = 20;
+    directionalLight.shadow.camera.bottom = -60;
     scene.add(directionalLight);
 
     // Secondary softer light
@@ -92,12 +188,12 @@ function initThreeJS() {
     pointLight.position.set(-10, 10, -10);
     scene.add(pointLight);
 
-    // Ground plane to receive shadows
-    const groundGeometry = new THREE.PlaneGeometry(100, 100);
+    // Ground plane to receive shadows - expanded for larger tree
+    const groundGeometry = new THREE.PlaneGeometry(150, 150);
     const groundMaterial = new THREE.ShadowMaterial({ opacity: 0.1 });
     const ground = new THREE.Mesh(groundGeometry, groundMaterial);
     ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -5; // Position lower below spheres
+    ground.position.y = -55; // Position below 10-row tree
     ground.receiveShadow = true;
     scene.add(ground);
 
@@ -115,6 +211,9 @@ function initThreeJS() {
     renderer.domElement.addEventListener('mouseup', onMouseUp);
     renderer.domElement.addEventListener('click', onClick);
     renderer.domElement.addEventListener('wheel', onMouseWheel, { passive: false });
+    
+    // Create the gold star at the top of the tree
+    createTreeStar();
 }
 
 // ============ SPHERE CREATION ============
@@ -156,6 +255,8 @@ function createSphere(data) {
     mesh.receiveShadow = true;
     
     // Arrange spheres in triangle formation (Christmas tree style)
+    // Tree structure: Row 0 = 1 sphere, Row 1 = 2 spheres, ... Row 9 = 10 spheres
+    // Total capacity: 1+2+3+4+5+6+7+8+9+10 = 55 spheres (supports 50+)
     const spacing = 5; // Space between spheres
     
     // Calculate triangle position
@@ -239,14 +340,19 @@ function updatePhysics() {
         sphere.position.z = 0;
         sphere.velocity.z = 0;
 
-        // Boundary collision (invisible walls)
-        const boundary = 12;
-        if (Math.abs(sphere.position.x) > boundary) {
-            sphere.position.x = Math.sign(sphere.position.x) * boundary;
+        // Boundary collision (invisible walls) - expanded for 10-row tree
+        const boundaryX = 30; // Wide enough for bottom row (10 spheres)
+        const boundaryY = 50; // Tall enough for 10 rows
+        if (Math.abs(sphere.position.x) > boundaryX) {
+            sphere.position.x = Math.sign(sphere.position.x) * boundaryX;
             sphere.velocity.x *= -physics.restitution;
         }
-        if (Math.abs(sphere.position.y) > boundary) {
-            sphere.position.y = Math.sign(sphere.position.y) * boundary;
+        if (sphere.position.y > 10) { // Top boundary
+            sphere.position.y = 10;
+            sphere.velocity.y *= -physics.restitution;
+        }
+        if (sphere.position.y < -boundaryY) { // Bottom boundary
+            sphere.position.y = -boundaryY;
             sphere.velocity.y *= -physics.restitution;
         }
 
@@ -301,6 +407,13 @@ function animate() {
     requestAnimationFrame(animate);
     
     updatePhysics();
+    
+    // Animate the tree star (gentle floating and rotation)
+    if (treeStar) {
+        const time = Date.now() * 0.001;
+        treeStar.position.y = 6 + Math.sin(time) * 0.3; // Gentle bobbing above tree
+        treeStar.rotation.z = Math.sin(time * 0.5) * 0.1; // Slight wobble
+    }
     
     // Don't rotate spheres - keep images visible
 
@@ -370,12 +483,15 @@ function onTouchMove(event) {
         
         if (lastPinchDistance > 0) {
             const delta = distance - lastPinchDistance;
-            const zoomSpeed = 0.05;
+            const zoomSpeed = 0.8;
             
             // Zoom camera
             camera.position.z -= delta * zoomSpeed;
-            // Clamp zoom
-            camera.position.z = Math.max(10, Math.min(50, camera.position.z));
+            // Clamp zoom - extended range for larger tree
+            camera.position.z = Math.max(20, Math.min(120, camera.position.z));
+            
+            // Keep looking at the same target
+            camera.lookAt(cameraTarget.x, cameraTarget.y, 0);
         }
         
         lastPinchDistance = distance;
@@ -410,16 +526,21 @@ function onTouchMove(event) {
             };
         }
     } else if (!isDragging && !selectedSphere) {
-        // Camera rotation by swiping
+        // Camera panning by swiping on empty space
         if (event.touches.length === 1 && touchStart) {
             const deltaX = event.touches[0].clientX - touchStart.x;
             const deltaY = event.touches[0].clientY - touchStart.y;
             
-            camera.rotation.y += deltaX * 0.005;
-            camera.rotation.x += deltaY * 0.005;
+            // Scale pan speed based on zoom level
+            const panSpeed = camera.position.z * 0.003;
             
-            // Clamp vertical rotation
-            camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+            cameraTarget.x -= deltaX * panSpeed;
+            cameraTarget.y += deltaY * panSpeed;
+            
+            // Update camera position and look-at
+            camera.position.x = cameraTarget.x;
+            camera.position.y = cameraTarget.y;
+            camera.lookAt(cameraTarget.x, cameraTarget.y, 0);
             
             touchStart = {
                 x: event.touches[0].clientX,
@@ -476,6 +597,10 @@ function onMouseDown(event) {
         selectedSphere = intersects[0].object;
         selectedSphere.userData.isDragging = true;
         isDragging = true;
+    } else {
+        // No sphere clicked - start panning
+        isPanning = true;
+        panStart = { x: event.clientX, y: event.clientY };
     }
 }
 
@@ -506,6 +631,23 @@ function onMouseMove(event) {
             (Math.random() - 0.5) * 0.05,
             0 // No Z velocity
         );
+    } else if (isPanning) {
+        // Pan the camera
+        const deltaX = event.clientX - panStart.x;
+        const deltaY = event.clientY - panStart.y;
+        
+        // Scale pan speed based on zoom level
+        const panSpeed = camera.position.z * 0.002;
+        
+        cameraTarget.x -= deltaX * panSpeed;
+        cameraTarget.y += deltaY * panSpeed;
+        
+        // Update camera position and look-at
+        camera.position.x = cameraTarget.x;
+        camera.position.y = cameraTarget.y;
+        camera.lookAt(cameraTarget.x, cameraTarget.y, 0);
+        
+        panStart = { x: event.clientX, y: event.clientY };
     }
 }
 
@@ -515,6 +657,7 @@ function onMouseUp() {
         selectedSphere = null;
         isDragging = false;
     }
+    isPanning = false;
     mouseDownPosition = null;
 }
 
@@ -545,11 +688,14 @@ function onMouseWheel(event) {
     event.preventDefault();
     
     // Zoom camera based on scroll direction
-    const zoomSpeed = 0.5;
+    const zoomSpeed = 10.0;
     camera.position.z += event.deltaY * zoomSpeed * 0.01;
     
-    // Clamp zoom
-    camera.position.z = Math.max(10, Math.min(50, camera.position.z));
+    // Clamp zoom - extended range for larger tree
+    camera.position.z = Math.max(20, Math.min(120, camera.position.z));
+    
+    // Keep looking at the same target
+    camera.lookAt(cameraTarget.x, cameraTarget.y, 0);
 }
 
 // ============ API FUNCTIONS ============
@@ -959,7 +1105,7 @@ async function confirmCrop() {
                     closeCropModal();
                     
                     // Update file name to show image is ready
-                    document.getElementById('file-name').textContent = 'âœ“ Photo positioned and ready';
+                    document.getElementById('file-name').textContent = 'Ã¢Å“â€œ Photo positioned and ready';
                     document.getElementById('file-name').style.color = '#2d5016';
                     document.getElementById('file-name').style.fontWeight = '600';
                     
