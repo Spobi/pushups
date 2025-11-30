@@ -112,7 +112,7 @@ function updateStarPosition() {
 // ============ INITIALIZATION ============
 
 // Christmas emojis for loading screen
-const christmasEmojis = ['ðŸŽ„', 'ðŸŽ…', 'â›„', 'ðŸŽ', 'â­', 'ðŸŒŸ', 'â„', 'ðŸ•¯ï¸', 'ðŸ¦Œ', 'ðŸ¤¶'];
+const christmasEmojis = ['🎄', '🎅', '⛄', '🎁', '⭐', '🌟', '❄️', '🕯️', '🦌', '🤶', '💯'];
 
 function createFallingEmoji() {
     const emojiContainer = document.getElementById('emoji-container');
