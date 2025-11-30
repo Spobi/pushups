@@ -31,13 +31,28 @@ app.use(helmet({
 }));
 
 // CORS configuration
+const allowedOrigins = [
+  'http://localhost:8002',
+  'http://localhost:3000',
+  'http://127.0.0.1:8002',
+  'https://pushups-frontend.onrender.com',
+  'https://emanuswell.christmas',
+  'https://www.emanuswell.christmas',
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
 const corsOptions = {
-  origin: [
-    'http://localhost:8002',
-    'https://pushups-frontend.onrender.com',
-    'https://emanuswell.christmas',
-    process.env.FRONTEND_URL
-  ].filter(Boolean),
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   optionsSuccessStatus: 200,
   credentials: true
 };
@@ -131,13 +146,16 @@ app.get('/api/health', (req, res) => {
 // Get all spheres
 app.get('/api/spheres', async (req, res) => {
   try {
+    console.log('Fetching spheres, request origin:', req.get('origin'));
     const result = await pool.query(
       'SELECT id, name, bio, image_url, is_failed, position_x, position_y, position_z, created_at FROM spheres ORDER BY created_at DESC'
     );
+    console.log('Successfully fetched', result.rows.length, 'spheres');
     res.json(result.rows);
   } catch (error) {
-    console.error('Error fetching spheres:', error);
-    res.status(500).json({ error: 'Failed to fetch spheres' });
+    console.error('Error fetching spheres:', error.message);
+    console.error('Full error:', error);
+    res.status(500).json({ error: 'Failed to fetch spheres', details: error.message });
   }
 });
 

@@ -1,7 +1,15 @@
 // Configuration
-const API_BASE_URL = window.location.hostname === 'localhost' 
-    ? 'http://localhost:3003/api' 
-    : 'https://pushups-m8vq.onrender.com/api';
+const API_BASE_URL = (() => {
+    const hostname = window.location.hostname;
+    
+    // Local development
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'http://localhost:3003/api';
+    }
+    
+    // Production - all domains point to the same backend
+    return 'https://pushups-m8vq.onrender.com/api';
+})();
 
 // Global state
 let scene, camera, renderer, spheres = [], raycaster, mouse, touchStart, isDragging = false;
@@ -112,7 +120,7 @@ function updateStarPosition() {
 // ============ INITIALIZATION ============
 
 // Christmas emojis for loading screen
-const christmasEmojis = ['🎄', '🎅', '⛄', '🎁', '⭐', '🌟', '❄️', '🕯️', '🦌', '🤶', '💯'];
+const christmasEmojis = ['ðŸŽ„', 'ðŸŽ…', 'â›„', 'ðŸŽ', 'â­', 'ðŸŒŸ', 'â„ï¸', 'ðŸ•¯ï¸', 'ðŸ¦Œ', 'ðŸ¤¶', 'ðŸ’¯'];
 
 function createFallingEmoji() {
     const emojiContainer = document.getElementById('emoji-container');
@@ -1105,7 +1113,7 @@ async function confirmCrop() {
                     closeCropModal();
                     
                     // Update file name to show image is ready
-                    document.getElementById('file-name').textContent = 'Ã¢Å“â€œ Photo positioned and ready';
+                    document.getElementById('file-name').textContent = 'ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Photo positioned and ready';
                     document.getElementById('file-name').style.color = '#2d5016';
                     document.getElementById('file-name').style.fontWeight = '600';
                     
