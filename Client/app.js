@@ -13,7 +13,7 @@ let lastPinchDistance = 0; // Track pinch zoom distance
 let mouseDownPosition = null; // Track mouse down position for click vs drag detection
 let hasDraggedMouse = false; // Track if mouse has been dragged
 let treeStar = null; // The gold star at top of tree
-let cameraTarget = { x: 0, y: -20 }; // Where the camera is looking
+let cameraTarget = { x: 0, y: -10 }; // Where the camera is looking
 let isPanning = false; // Track if we're panning the camera
 let panStart = { x: 0, y: 0 }; // Track pan start position
 
@@ -151,7 +151,7 @@ function initThreeJS() {
         0.1,
         1000
     );
-    camera.position.set(cameraTarget.x, cameraTarget.y, 60); // Use cameraTarget for initial position
+    camera.position.set(cameraTarget.x, cameraTarget.y, 40); // Use cameraTarget for initial position
     camera.lookAt(cameraTarget.x, cameraTarget.y, 0); // Look at target
 
     // Renderer with shadow support
@@ -488,7 +488,7 @@ function onTouchMove(event) {
             // Zoom camera
             camera.position.z -= delta * zoomSpeed;
             // Clamp zoom - extended range for larger tree
-            camera.position.z = Math.max(20, Math.min(120, camera.position.z));
+            camera.position.z = Math.max(15, Math.min(120, camera.position.z));
             
             // Keep looking at the same target
             camera.lookAt(cameraTarget.x, cameraTarget.y, 0);
@@ -692,7 +692,7 @@ function onMouseWheel(event) {
     camera.position.z += event.deltaY * zoomSpeed * 0.01;
     
     // Clamp zoom - extended range for larger tree
-    camera.position.z = Math.max(20, Math.min(120, camera.position.z));
+    camera.position.z = Math.max(15, Math.min(120, camera.position.z));
     
     // Keep looking at the same target
     camera.lookAt(cameraTarget.x, cameraTarget.y, 0);
