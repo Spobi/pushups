@@ -66,13 +66,13 @@ function createTreeStar() {
     const santaTexture = textureLoader.load('./buff-santa.jpg');
     
     // Create gold reflective material with Santa image overlay
-    const starMaterial = new THREE.MeshBasicMaterial({
+    const starMaterial = new THREE.MeshPhongMaterial({
         color: 0xffd700, // Gold color
-        emissive: 0xcc9900,
-        emissiveIntensity: 0.9,
-        shininess: 100,
+        emissive: 0xaa8800,
+        emissiveIntensity: 0.3,
+        shininess: 150,
         specular: 0xffffcc,
-        reflectivity: 0.2
+        reflectivity: 1.0
     });
     
     const starMesh = new THREE.Mesh(starGeometry, starMaterial);
@@ -115,158 +115,6 @@ function updateStarPosition() {
     // The tree grows downward, so the top is always at y=0 or slightly above
     const starY = 5; // Fixed position above the tree top
     treeStar.position.set(0, starY, 0);
-}
-
-// ============ TREE TRIANGLE BACKGROUND ============
-
-function createPineNeedleTexture() {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    // Higher resolution for better detail
-    canvas.width = 512;
-    canvas.height = 512;
-    
-    // Base dark green background
-    ctx.fillStyle = '#1a4d2e';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw layers of pine needle clusters
-    const needleColors = ['#2d5a3a', '#1e5530', '#3a6b48', '#244f35', '#1a5c2e', '#2a6640'];
-    
-    // Draw many small needle clusters
-    for (let i = 0; i < 800; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const clusterSize = 8 + Math.random() * 12;
-        const rotation = Math.random() * Math.PI * 2;
-        
-        drawNeedleCluster(ctx, x, y, clusterSize, rotation, needleColors);
-    }
-    
-    // Add some lighter highlights
-    for (let i = 0; i < 200; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const clusterSize = 6 + Math.random() * 8;
-        const rotation = Math.random() * Math.PI * 2;
-        
-        drawNeedleCluster(ctx, x, y, clusterSize, rotation, ['#4a7a58', '#5a8a68', '#3d6b4a']);
-    }
-    
-    // Add subtle dark shadows
-    for (let i = 0; i < 150; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const clusterSize = 10 + Math.random() * 15;
-        const rotation = Math.random() * Math.PI * 2;
-        
-        drawNeedleCluster(ctx, x, y, clusterSize, rotation, ['#0f3320', '#153d28', '#1a4430']);
-    }
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(4, 8); // Tile the texture
-    
-    return texture;
-}
-
-function drawNeedleCluster(ctx, x, y, size, rotation, colors) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(rotation);
-    
-    // Draw 5-8 needles radiating from center point
-    const needleCount = 5 + Math.floor(Math.random() * 4);
-    
-    for (let i = 0; i < needleCount; i++) {
-        const angle = (i / needleCount) * Math.PI - Math.PI / 2; // Fan out upward
-        const needleLength = size * (0.7 + Math.random() * 0.3);
-        const needleWidth = 1 + Math.random() * 1.5;
-        
-        ctx.beginPath();
-        ctx.strokeStyle = colors[Math.floor(Math.random() * colors.length)];
-        ctx.lineWidth = needleWidth;
-        ctx.lineCap = 'round';
-        
-        // Draw needle as a slightly curved line
-        const endX = Math.cos(angle) * needleLength;
-        const endY = Math.sin(angle) * needleLength;
-        const controlX = Math.cos(angle) * needleLength * 0.5 + (Math.random() - 0.5) * 3;
-        const controlY = Math.sin(angle) * needleLength * 0.5 + (Math.random() - 0.5) * 3;
-        
-        ctx.moveTo(0, 0);
-        ctx.quadraticCurveTo(controlX, controlY, endX, endY);
-        ctx.stroke();
-    }
-    
-    ctx.restore();
-}
-
-function createTreeTriangle() {
-    // Create a triangle shape for the Christmas tree background
-    const shape = new THREE.Shape();
-    
-    // Triangle dimensions - sized to fit behind all spheres
-    // Top point aligns with star, bottom spans wider than bottom row
-    const topY = 4;         // Just below the star
-    const bottomY = -48;    // Below the last row of spheres
-    const bottomWidth = 55; // Wide enough for 10 spheres in bottom row
-    
-    // Draw triangle: start at top, go to bottom-left, bottom-right, back to top
-    shape.moveTo(0, topY);                    // Top point (centered)
-    shape.lineTo(-bottomWidth / 2, bottomY); // Bottom left
-    shape.lineTo(bottomWidth / 2, bottomY);  // Bottom right
-    shape.lineTo(0, topY);                   // Back to top
-    
-    // Create geometry from shape
-    const geometry = new THREE.ShapeGeometry(shape);
-    
-    // Generate UV coordinates for texture mapping
-    geometry.computeBoundingBox();
-    const boundingBox = geometry.boundingBox;
-    const uvAttribute = geometry.attributes.position;
-    const uvArray = [];
-    
-    for (let i = 0; i < uvAttribute.count; i++) {
-        const x = uvAttribute.getX(i);
-        const y = uvAttribute.getY(i);
-        
-        // Map positions to 0-1 UV range
-        const u = (x - boundingBox.min.x) / (boundingBox.max.x - boundingBox.min.x);
-        const v = (y - boundingBox.min.y) / (boundingBox.max.y - boundingBox.min.y);
-        
-        uvArray.push(u, v);
-    }
-    
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvArray, 2));
-    
-    // Compute normals for proper lighting
-    geometry.computeVertexNormals();
-    
-    // Create pine needle texture
-    const pineTexture = createPineNeedleTexture();
-    
-    // Use MeshStandardMaterial for shadow receiving
-    const material = new THREE.MeshStandardMaterial({
-        map: pineTexture,
-        side: THREE.DoubleSide,
-        roughness: 0.9,
-        metalness: 0.0
-    });
-    
-    const triangle = new THREE.Mesh(geometry, material);
-    
-    // Position behind the spheres on z-axis (closer for softer shadows)
-    triangle.position.z = -2;
-    
-    // Enable shadow receiving
-    triangle.receiveShadow = true;
-    
-    scene.add(triangle);
-    
-    return triangle;
 }
 
 // ============ INITIALIZATION ============
@@ -325,13 +173,13 @@ function initThreeJS() {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-    // Lighting - higher ambient for softer shadows
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
     // Main directional light with shadows
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
-    directionalLight.position.set(5, 15, 20);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(10, 20, 10);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
@@ -341,7 +189,6 @@ function initThreeJS() {
     directionalLight.shadow.camera.right = 50;
     directionalLight.shadow.camera.top = 20;
     directionalLight.shadow.camera.bottom = -60;
-    directionalLight.shadow.radius = 4; // Softer shadow edges
     scene.add(directionalLight);
 
     // Secondary softer light
@@ -375,9 +222,6 @@ function initThreeJS() {
     
     // Create the gold star at the top of the tree
     createTreeStar();
-    
-    // Create Christmas tree triangle behind spheres
-    createTreeTriangle();
 }
 
 // ============ SPHERE CREATION ============
@@ -402,9 +246,9 @@ function createSphere(data) {
     // Create material with color based on failure status
     const material = new THREE.MeshPhongMaterial({
         map: texture,
-        color: data.is_failed ? 0xff8888 : 0xe8fff0,
-        emissive: data.is_failed ? 0x440000 : 0x1a4d2e,
-        emissiveIntensity: 0.1,
+        color: data.is_failed ? 0xff0000 : 0x4ade80,
+        emissive: data.is_failed ? 0x660000 : 0x1a4d2e,
+        emissiveIntensity: 0.2,
         shininess: 100,
         reflectivity: 0.8,
         envMap: null,
@@ -473,9 +317,8 @@ function createSphere(data) {
 function updateSphereColor(sphereId, isFailed) {
     const sphere = spheres.find(s => s.userData.id === sphereId);
     if (sphere) {
-        sphere.material.color.setHex(isFailed ? 0xff8888 : 0xe8fff0);
-        sphere.material.emissive.setHex(isFailed ? 0x440000 : 0x1a4d2e);
-        sphere.material.emissiveIntensity = 0.1;
+        sphere.material.color.setHex(isFailed ? 0xff0000 : 0x4ade80);
+        sphere.material.emissive.setHex(isFailed ? 0x660000 : 0x1a4d2e);
         sphere.userData.is_failed = isFailed;
     }
 }

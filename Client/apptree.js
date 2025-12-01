@@ -66,13 +66,13 @@ function createTreeStar() {
     const santaTexture = textureLoader.load('./buff-santa.jpg');
     
     // Create gold reflective material with Santa image overlay
-    const starMaterial = new THREE.MeshBasicMaterial({
+    const starMaterial = new THREE.MeshPhongMaterial({
         color: 0xffd700, // Gold color
-        emissive: 0xcc9900,
-        emissiveIntensity: 0.9,
-        shininess: 100,
+        emissive: 0xaa8800,
+        emissiveIntensity: 0.3,
+        shininess: 150,
         specular: 0xffffcc,
-        reflectivity: 0.2
+        reflectivity: 1.0
     });
     
     const starMesh = new THREE.Mesh(starGeometry, starMaterial);
@@ -242,27 +242,19 @@ function createTreeTriangle() {
     
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvArray, 2));
     
-    // Compute normals for proper lighting
-    geometry.computeVertexNormals();
-    
     // Create pine needle texture
     const pineTexture = createPineNeedleTexture();
     
-    // Use MeshStandardMaterial for shadow receiving
-    const material = new THREE.MeshStandardMaterial({
+    // Christmas tree material with pine needle texture
+    const material = new THREE.MeshBasicMaterial({
         map: pineTexture,
-        side: THREE.DoubleSide,
-        roughness: 0.9,
-        metalness: 0.0
+        side: THREE.DoubleSide
     });
     
     const triangle = new THREE.Mesh(geometry, material);
     
-    // Position behind the spheres on z-axis (closer for softer shadows)
-    triangle.position.z = -2;
-    
-    // Enable shadow receiving
-    triangle.receiveShadow = true;
+    // Position behind the spheres on z-axis
+    triangle.position.z = -5;
     
     scene.add(triangle);
     
@@ -325,13 +317,13 @@ function initThreeJS() {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-    // Lighting - higher ambient for softer shadows
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
     // Main directional light with shadows
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
-    directionalLight.position.set(5, 15, 20);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(10, 20, 10);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
@@ -341,7 +333,6 @@ function initThreeJS() {
     directionalLight.shadow.camera.right = 50;
     directionalLight.shadow.camera.top = 20;
     directionalLight.shadow.camera.bottom = -60;
-    directionalLight.shadow.radius = 4; // Softer shadow edges
     scene.add(directionalLight);
 
     // Secondary softer light
@@ -473,9 +464,8 @@ function createSphere(data) {
 function updateSphereColor(sphereId, isFailed) {
     const sphere = spheres.find(s => s.userData.id === sphereId);
     if (sphere) {
-        sphere.material.color.setHex(isFailed ? 0xff8888 : 0xe8fff0);
-        sphere.material.emissive.setHex(isFailed ? 0x440000 : 0x1a4d2e);
-        sphere.material.emissiveIntensity = 0.1;
+        sphere.material.color.setHex(isFailed ? 0xff6666 : 0x60c880);
+        sphere.material.emissive.setHex(isFailed ? 0x660000 : 0x1e5530);
         sphere.userData.is_failed = isFailed;
     }
 }
