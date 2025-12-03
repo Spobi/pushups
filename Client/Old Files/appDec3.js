@@ -11,11 +11,6 @@ const API_BASE_URL = (() => {
     return 'https://pushups-m8vq.onrender.com/api';
 })();
 
-// ============ PUSHUP COUNTER CONFIGURATION ============
-// UPDATE THIS NUMBER TO CHANGE THE TOTAL PUSHUPS DISPLAYED
-const TOTAL_PUSHUPS = 10900;
-// ======================================================
-
 // Global state
 let scene, camera, renderer, spheres = [], raycaster, mouse, touchStart, isDragging = false;
 let selectedSphere = null, currentSphereId = null;
@@ -29,9 +24,6 @@ let treeStar = null; // The gold star at top of tree
 let cameraTarget = { x: 0, y: -10 }; // Where the camera is looking
 let isPanning = false; // Track if we're panning the camera
 let panStart = { x: 0, y: 0 }; // Track pan start position
-let pushupCounter = null; // The 3D pushup counter display
-let counterAnimationStarted = false; // Track if counter animation has started
-let currentCounterValue = 0; // Current displayed counter value
 
 // ============ STAR GEOMETRY CREATION ============
 
@@ -277,186 +269,6 @@ function createTreeTriangle() {
     return triangle;
 }
 
-// ============ PUSHUP COUNTER DISPLAY ============
-
-function createCounterTexture(value) {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    // High resolution for crisp text
-    canvas.width = 512;
-    canvas.height = 384;
-    
-    // Create gradient background (festive red with slight depth)
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, '#c41e3a');    // Christmas red
-    gradient.addColorStop(0.5, '#a01830');
-    gradient.addColorStop(1, '#8b1528');
-    
-    // Draw rounded rectangle background
-    const cornerRadius = 40;
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.moveTo(cornerRadius, 0);
-    ctx.lineTo(canvas.width - cornerRadius, 0);
-    ctx.quadraticCurveTo(canvas.width, 0, canvas.width, cornerRadius);
-    ctx.lineTo(canvas.width, canvas.height - cornerRadius);
-    ctx.quadraticCurveTo(canvas.width, canvas.height, canvas.width - cornerRadius, canvas.height);
-    ctx.lineTo(cornerRadius, canvas.height);
-    ctx.quadraticCurveTo(0, canvas.height, 0, canvas.height - cornerRadius);
-    ctx.lineTo(0, cornerRadius);
-    ctx.quadraticCurveTo(0, 0, cornerRadius, 0);
-    ctx.closePath();
-    ctx.fill();
-    
-    // Add subtle border
-    ctx.strokeStyle = '#ffd700';
-    ctx.lineWidth = 8;
-    ctx.stroke();
-    
-    // Add inner glow/highlight
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-    ctx.lineWidth = 4;
-    ctx.stroke();
-    
-    // Draw "TOTAL PUSHUPS" header
-    ctx.fillStyle = '#1a5c2e';  // Christmas green
-    ctx.font = 'bold 52px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    
-    // Add text shadow for depth
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetX = 2;
-    ctx.shadowOffsetY = 2;
-    
-    ctx.fillText('TOTAL PUSHUPS', canvas.width / 2, 80);
-    
-    // Draw the number (large and bold)
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 140px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.shadowBlur = 6;
-    ctx.shadowOffsetX = 3;
-    ctx.shadowOffsetY = 3;
-    
-    // Format number with commas
-    const formattedNumber = Math.floor(value).toLocaleString();
-    ctx.fillText(formattedNumber, canvas.width / 2, 240);
-    
-    // Add a small decorative element (💪 emoji effect with circles)
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-    
-    // Draw small decorative dots
-    ctx.fillStyle = '#ffd700';
-    const dotY = 330;
-    for (let i = 0; i < 5; i++) {
-        const dotX = canvas.width / 2 - 60 + i * 30;
-        ctx.beginPath();
-        ctx.arc(dotX, dotY, 6, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.needsUpdate = true;
-    
-    return texture;
-}
-
-function createPushupCounter() {
-    // Create the counter display as a 3D plane
-    const width = 20;
-    const height = 15;
-    
-    // Create geometry with slight rounded corners effect via segments
-    const geometry = new THREE.PlaneGeometry(width, height);
-    
-    // Create initial texture with 0
-    const texture = createCounterTexture(0);
-    
-    const material = new THREE.MeshStandardMaterial({
-        map: texture,
-        transparent: true,
-        roughness: 0.3,
-        metalness: 0.1,
-        side: THREE.DoubleSide
-    });
-    
-    const counterMesh = new THREE.Mesh(geometry, material);
-    
-    // Position to the right of the tree
-    // Tree extends to about x=25 at bottom, so place counter at x=45
-    counterMesh.position.set(45, -15, 2);
-    
-    // Slight rotation to give 3D feel
-    counterMesh.rotation.y = -0.15;
-    
-    // Enable shadows
-    counterMesh.castShadow = true;
-    counterMesh.receiveShadow = true;
-    
-    // Store reference for animation
-    counterMesh.userData = {
-        texture: texture,
-        targetValue: TOTAL_PUSHUPS,
-        currentValue: 0
-    };
-    
-    scene.add(counterMesh);
-    pushupCounter = counterMesh;
-    
-    return counterMesh;
-}
-
-function updateCounterDisplay(value) {
-    if (!pushupCounter) return;
-    
-    // Create new texture with updated value
-    const newTexture = createCounterTexture(value);
-    
-    // Dispose old texture
-    if (pushupCounter.material.map) {
-        pushupCounter.material.map.dispose();
-    }
-    
-    // Apply new texture
-    pushupCounter.material.map = newTexture;
-    pushupCounter.material.needsUpdate = true;
-    pushupCounter.userData.currentValue = value;
-    currentCounterValue = value;
-}
-
-function animateCounterUp() {
-    if (!pushupCounter || counterAnimationStarted) return;
-    
-    counterAnimationStarted = true;
-    const targetValue = TOTAL_PUSHUPS;
-    const duration = 2000; // 2 seconds for the count-up
-    const startTime = Date.now();
-    const startValue = 0;
-    
-    function easeOutQuart(t) {
-        return 1 - Math.pow(1 - t, 4);
-    }
-    
-    function updateCounter() {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const easedProgress = easeOutQuart(progress);
-        
-        const currentValue = Math.floor(startValue + (targetValue - startValue) * easedProgress);
-        updateCounterDisplay(currentValue);
-        
-        if (progress < 1) {
-            requestAnimationFrame(updateCounter);
-        }
-    }
-    
-    updateCounter();
-}
-
 // ============ INITIALIZATION ============
 
 // Christmas emojis for loading screen
@@ -566,9 +378,6 @@ function initThreeJS() {
     
     // Create Christmas tree triangle behind spheres
     createTreeTriangle();
-    
-    // Create the pushup counter display
-    createPushupCounter();
 }
 
 // ============ SPHERE CREATION ============
@@ -769,13 +578,6 @@ function animate() {
         const time = Date.now() * 0.001;
         treeStar.position.y = 6 + Math.sin(time) * 0.3; // Gentle bobbing above tree
         treeStar.rotation.z = Math.sin(time * 0.5) * 0.1; // Slight wobble
-    }
-    
-    // Animate the pushup counter (gentle floating)
-    if (pushupCounter) {
-        const time = Date.now() * 0.001;
-        pushupCounter.position.y = -15 + Math.sin(time * 0.8 + 1) * 0.5; // Gentle bobbing
-        pushupCounter.rotation.y = -0.15 + Math.sin(time * 0.3) * 0.03; // Very subtle rotation
     }
     
     // Don't rotate spheres - keep images visible
@@ -1209,8 +1011,6 @@ function hideLoading() {
     loadingScreen.classList.add('hidden');
     setTimeout(() => {
         loadingScreen.style.display = 'none';
-        // Start the counter animation after loading screen fades out
-        animateCounterUp();
     }, 500);
 }
 
@@ -1470,7 +1270,7 @@ async function confirmCrop() {
                     closeCropModal();
                     
                     // Update file name to show image is ready
-                    document.getElementById('file-name').textContent = 'ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ Photo positioned and ready';
+                    document.getElementById('file-name').textContent = 'ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Photo positioned and ready';
                     document.getElementById('file-name').style.color = '#2d5016';
                     document.getElementById('file-name').style.fontWeight = '600';
                     
