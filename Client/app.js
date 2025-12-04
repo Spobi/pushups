@@ -13,7 +13,7 @@ const API_BASE_URL = (() => {
 
 // ============ PUSHUP COUNTER CONFIGURATION ============
 // UPDATE THIS NUMBER TO CHANGE THE TOTAL PUSHUPS DISPLAYED
-const TOTAL_PUSHUPS = 10900;
+const TOTAL_PUSHUPS = 16200;
 // ======================================================
 
 // Global state
@@ -593,8 +593,8 @@ function createSphere(data) {
     // Create material with color based on failure status
     const material = new THREE.MeshPhongMaterial({
         map: texture,
-        color: data.is_failed ? 0xff8888 : 0xe8fff0,
-        emissive: data.is_failed ? 0x440000 : 0x1a4d2e,
+        color: data.is_failed ? 0xff2222 : 0xe8fff0,
+        emissive: data.is_failed ? 0x990000 : 0x1a4d2e,
         emissiveIntensity: 0.1,
         shininess: 100,
         reflectivity: 0.8,
@@ -664,8 +664,8 @@ function createSphere(data) {
 function updateSphereColor(sphereId, isFailed) {
     const sphere = spheres.find(s => s.userData.id === sphereId);
     if (sphere) {
-        sphere.material.color.setHex(isFailed ? 0xff8888 : 0xe8fff0);
-        sphere.material.emissive.setHex(isFailed ? 0x440000 : 0x1a4d2e);
+        sphere.material.color.setHex(isFailed ? 0xff2222 : 0xe8fff0);
+        sphere.material.emissive.setHex(isFailed ? 0x990000 : 0x1a4d2e);
         sphere.material.emissiveIntensity = 0.1;
         sphere.userData.is_failed = isFailed;
     }
