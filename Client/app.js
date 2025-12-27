@@ -13,7 +13,7 @@ const API_BASE_URL = (() => {
 
 // ============ PUSHUP COUNTER CONFIGURATION ============
 // UPDATE THIS NUMBER TO CHANGE THE TOTAL PUSHUPS DISPLAYED
-const TOTAL_PUSHUPS = 90700;
+const TOTAL_PUSHUPS = 102400;
 // ======================================================
 
 // Global state
